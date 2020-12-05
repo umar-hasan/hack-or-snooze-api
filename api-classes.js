@@ -44,11 +44,13 @@ class StoryList {
     // This function will return the newly created story so it can be used in
     // the script.js file where it will be appended to the DOM
 
-    const res = axios.post(`${BASE_URL}/stories`,
-                {token: user.loginToken,
-                 story: newStory})
+    const res = await axios.post(`${BASE_URL}/stories`, {token: user.loginToken, story: newStory})
+
+    console.log(user.ownStories)
     
-    user.addOwnStory(newStory)
+    user.addOwnStory(res.data.story)
+
+    
 
     return newStory
 
@@ -59,6 +61,18 @@ class StoryList {
     const res = await axios.delete(`${BASE_URL}/stories/${storyId}`, {data: {token: user.loginToken}})
 
     user.removeOwnStory(res.data.story)
+
+  }
+
+  async updateStory(user, storyId, title, author) {
+    await axios.patch(`${BASE_URL}/stories/${storyId}`, 
+      {token: user.loginToken, 
+       story: {
+         title,
+         author
+      }})
+
+      user.changeOwnStory(storyId, author, title)
 
   }
 
@@ -166,19 +180,54 @@ class User {
     return existingUser;
   }
 
+  /**
+   * 
+   *  Adds a story that a user creates. 
+   */
+
   addOwnStory(story) {
+    console.log(this.ownStories)
     this.ownStories.push(story)
   }
 
+  /**
+   * 
+   *  Removes a story that a user has created, if it exists.
+   */
+
   removeOwnStory(story) {
-    this.ownStories = this.ownStories.splice(this.indexOfOwnStory(story), 1)
+
+    if (this.isOwnStory(story)) {
+      this.ownStories.splice(this.indexOfOwnStory(story), 1)
+    }
+    
   }
+
+  /**
+   * 
+   * Allows a user to edit a story they created.
+   * 
+   */
+
+  changeOwnStory(storyId, author, title) {
+    for (let i = 0; i < this.ownStories.length; i++) {
+      if (this.ownStories[i].storyId === storyId) {
+        this.ownStories[i].author = author
+        this.ownStories[i].title = title
+        break
+      }
+    }
+  }
+
+  /**
+   * 
+   * Searches for the index of a story a user has created.
+   * 
+   */
 
   indexOfOwnStory(story) {
     for (let i = 0; i < this.ownStories.length; i++) {
-      let s1 = JSON.stringify(this.ownStories[i])
-      let s2 = JSON.stringify(story)
-      if (s1 === s2) {
+      if (this.ownStories[i].storyId === story.storyId) {
         return i
       }
     }
@@ -187,14 +236,28 @@ class User {
 
   /**
    * 
+   *  Determines if a story was created by a user.
+   *  
+   */
+
+  isOwnStory(story) {
+    for (let i = 0; i < this.ownStories.length; i++) {
+      if (this.ownStories[i].username === story.username) {
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * 
    * Checks if a favorite story exists.
+   * 
    */
 
   isFavorite(story) {
     for (let i = 0; i < this.favorites.length; i++) {
-      let s1 = JSON.stringify(this.favorites[i])
-      let s2 = JSON.stringify(story)
-      if (s1 === s2) {
+      if (this.favorites[i].storyId === story.storyId) {
         return true
       }
     }

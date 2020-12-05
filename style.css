@@ -58,6 +58,10 @@ nav {
   margin-left: auto;
 }
 
+.separator {
+  margin: 0 5px;
+}
+
 .container {
   display: flex;
   flex-direction: column;
@@ -72,6 +76,10 @@ form {
 }
 
 form > * {
+  margin: 10px 0;
+}
+
+.edit-input div {
   margin: 10px 0;
 }
 
@@ -149,10 +157,20 @@ form > hr {
   color: gold;
 }
 
-.fas.fa-minus-circle {
-  color: red;
+.user-actions {
+  display: inline;
   float: right;
-  transform: translate(-100%, -100%);
+  transform: translate(-100%, -200%);
+}
+
+.far.fa-edit {
+  margin: 0 5px;
+  color: darkblue;
+}
+
+.fas.fa-minus-circle {
+  margin: 0 5px;
+  color: red;
 }
 
 .star,
@@ -215,6 +233,7 @@ form > hr {
 #user-profile {
   padding: 10px 20px 20px;
   font-size: 0.9rem;
+  display: none;
 }
 
 #user-profile > * {

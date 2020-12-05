@@ -2,18 +2,38 @@ $(async function() {
   // cache some selectors we'll be using quite a bit
   const $allStoriesList = $("#all-articles-list");
   const $submitForm = $("#submit-form");
+  const $editForm = $("#edit-article-form");
   const $filteredArticles = $("#filtered-articles");
   const $loginForm = $("#login-form");
   const $createAccountForm = $("#create-account-form");
   const $ownStories = $("#my-articles");
   const $navLogin = $("#nav-login");
+  const $navWelcome = $("#nav-welcome");
+  const $navFavs = $("#nav-fav-articles");
+  const $navAllArticles = $("#nav-all-articles");
+  const $navMyArticles = $("#nav-my-articles");
+  const $navAddArticle = $("#nav-add-article");
+  const $userProfile = $("#user-profile");
   const $navLogOut = $("#nav-logout");
+
+  const sections = [
+    $allStoriesList,
+    $submitForm,
+    $editForm,
+    $filteredArticles,
+    $loginForm,
+    $createAccountForm,
+    $ownStories,
+    $userProfile
+  ]
 
   // global storyList variable
   let storyList = null;
 
   // global currentUser variable
   let currentUser = null;
+
+  let selectedStoryId = null;
 
   await checkIfLoggedIn();
 
@@ -35,7 +55,7 @@ $(async function() {
     currentUser = userInstance;
     syncCurrentUserToLocalStorage();
     loginAndSubmitForm();
-    generateStories();
+    await generateStories();
     setUserInfo();
   });
 
@@ -57,7 +77,7 @@ $(async function() {
     currentUser = newUser;
     syncCurrentUserToLocalStorage();
     loginAndSubmitForm();
-    generateStories();
+    await generateStories();
     setUserInfo();
   });
 
@@ -66,6 +86,11 @@ $(async function() {
    */
 
   $navLogOut.on("click", function() {
+    $(".separator").hide();
+    $navFavs.hide();
+    $navAddArticle.hide();
+    $navMyArticles.hide();
+    $navAllArticles.hide();
     // empty out local storage
     localStorage.clear();
     // refresh the page, clearing memory
@@ -88,33 +113,70 @@ $(async function() {
    */
 
   $("body").on("click", "#nav-all", async function() {
-    hideElements();
-    await generateStories();
-    $allStoriesList.show();
+    await showAll();
   });
 
-  $allStoriesList.on("click", ".far.fa-star", async function() {
-    if (currentUser) {
-      let $storyId = $(this).parent().attr('id')
-      currentUser.addFavorite($storyId)
-      $(this).addClass("fas")
-      $(this).removeClass('far')
-    }
+  $navAllArticles.on("click", async function() {
+    console.log(currentUser.ownStories)
+    await showAll();
+  });
+
+  $navMyArticles.on("click", function() {
+    $filteredArticles.empty();
+    generateUserStories();
+    showAndHideRest($filteredArticles);
   })
 
-  $allStoriesList.on("click", ".fas.fa-star", async function() {
-    if (currentUser) {
-      let $storyId = $(this).parent().attr('id')
-      currentUser.removeFavorite($storyId)
-      $(this).addClass("far")
-      $(this).removeClass('fas')
-    }
+  $navFavs.on("click", function() {
+    $filteredArticles.empty();
+    generateUserFavorites();
+    showAndHideRest($filteredArticles);
   })
 
-  $allStoriesList.on("click", ".fas.fa-minus-circle", async function() {
-    let $storyId = $(this).parent().attr('id')
-    await storyList.deleteStory(currentUser, $storyId)
-    $(this).parent().remove()
+  $navAddArticle.on("click", function() {
+    showAndHideRest($submitForm)
+  })
+
+  $navWelcome.on("click", "a", async function() {
+    showAndHideRest($userProfile)
+  })
+
+
+  /**
+   * Fills in or empties out the star icon when a user favorites a story.
+   * 
+   * .far.fa-star = not favorited
+   * .fas.fa-star = favorited
+   */
+
+  $allStoriesList.on("click", ".far.fa-star", favoriteStory)
+
+  $allStoriesList.on("click", ".fas.fa-star", unfavoriteStory)
+
+  $filteredArticles.on("click", ".far.fa-star", favoriteStory)
+
+  $filteredArticles.on("click", ".fas.fa-star", unfavoriteStory)
+
+  /**
+   * Deletes a story that a user has made.
+   */
+
+  $allStoriesList.on("click", ".fas.fa-minus-circle", removeStory)
+
+  $filteredArticles.on("click", ".fas.fa-minus-circle", removeStory)
+
+  /**
+   * Allows a user to edit a story that they have made.
+   */
+
+  $allStoriesList.on("click", ".far.fa-edit", function() {
+    selectedStoryId = $(this).closest("li").attr('id')
+    showAndHideRest($editForm)
+  })
+
+  $filteredArticles.on("click", ".far.fa-edit", function() {
+    selectedStoryId = $(this).closest("li").attr('id')
+    showAndHideRest($editForm)
   })
 
   $submitForm.on("submit", async function(e) {
@@ -124,8 +186,15 @@ $(async function() {
       title: $('#title').val(),
       url: $('#url').val()
     }
+    $submitForm.trigger("reset")
     await storyList.addStory(currentUser, newStory)
-    generateStories()
+  })
+
+  $editForm.on("submit", async function(e) {
+    e.preventDefault();
+    await storyList.updateStory(currentUser, selectedStoryId, $("#edit-title").val(), $("#edit-author").val())
+    selectedStoryId = null
+    $editForm.trigger("reset")
   })
 
   /**
@@ -149,6 +218,7 @@ $(async function() {
       setUserInfo();
     }
 
+    showAndHideRest($allStoriesList)
 
   }
 
@@ -195,6 +265,49 @@ $(async function() {
     }
   }
 
+  function generateUserStories() {
+    // update our global variable
+    storyList = new StoryList(currentUser.ownStories);
+    // empty out that part of the page
+    $allStoriesList.empty();
+
+    console.log(storyList)
+
+    if (storyList.stories.length > 0) {
+      // loop through all of our stories and generate HTML for them
+      for (let story of storyList.stories) {
+        console.log(story.username)
+        const result = generateStoryHTML(story);
+        $filteredArticles.append(result);
+      }
+    }
+    else {
+      $filteredArticles.append($("<h6>You haven't added any stories yet.</h6>"))
+    }
+    
+  }
+
+  function generateUserFavorites() {
+    // update our global variable
+    storyList = new StoryList(currentUser.favorites);
+    // empty out that part of the page
+    $allStoriesList.empty();
+
+    console.log(storyList)
+
+    if (storyList.stories.length > 0) {
+      // loop through all of our stories and generate HTML for them
+      for (let story of storyList.stories) {
+        const result = generateStoryHTML(story);
+        $filteredArticles.append(result);
+      }
+    }
+    else {
+      $filteredArticles.append($("<h6>You haven't favorited any stories.</h6>"))
+    }
+    
+  }
+
   /**
    * A function to render HTML for an individual Story instance
    */
@@ -204,13 +317,17 @@ $(async function() {
 
     let fav = ''
     let del = ''
+    let edit = ''
+    let ownDiv = ''
     if(currentUser) {
       fav = currentUser.isFavorite(story) ? '<i class="fas fa-star"></i>' : '<i class="far fa-star"></i>'
+      if(currentUser.isOwnStory(story)) {
+        edit = '<i class="far fa-edit"></i>'
+        del = '<i class="fas fa-minus-circle"></i>'
+        ownDiv = `<div class="user-actions">${edit}${del}</div>`
+      }
     }
-    if(currentUser.indexOfOwnStory(story) !== -1) {
-      del = '<i class="fas fa-minus-circle"></i>'
-    }
-
+    
     // render story markup
     const storyMarkup = $(`
       <li id="${story.storyId}">
@@ -221,7 +338,7 @@ $(async function() {
         <small class="article-author">by ${story.author}</small>
         <small class="article-hostname ${hostName}">(${hostName})</small>
         <small class="article-username">posted by ${story.username}</small>
-        ${del}
+        ${ownDiv}
       </li>
     `);
 
@@ -245,14 +362,90 @@ $(async function() {
   function showNavForLoggedInUser() {
     $navLogin.hide();
     $navLogOut.show();
+    $navMyArticles.show();
+    $navAddArticle.show();
+    $navAllArticles.show();
+    $navFavs.show();
+    $("#nav-welcome a").text(`${currentUser.username}`)
+    $navWelcome.show();
     $ownStories.show();
-    $submitForm.show();
+    $(".separator").show();
   }
 
   function setUserInfo() {
     $('#profile-name').append(`<p>${currentUser.name}</p>`)
     $('#profile-username').append(`<p>${currentUser.username}</p>`)
     $('#profile-account-date').append(`<p>${currentUser.createdAt}</p>`)
+  }
+
+  /**
+   * Function to show all of the stories.
+   */
+
+  async function showAll() {
+    hideElements();
+    await generateStories();
+    showAndHideRest($allStoriesList);
+  }
+
+  /**
+   * Function to favorite a story.
+   */
+
+  async function favoriteStory() {
+    if (currentUser) {
+      let $storyId = $(this).closest("li").attr('id')
+      await currentUser.addFavorite($storyId)
+      $(this).addClass("fas")
+      $(this).removeClass('far')
+    }
+  }
+
+  /**
+   * Function to unfavorite a story.
+   */
+
+  async function unfavoriteStory() {
+    if (currentUser) {
+      let $storyId = $(this).closest("li").attr('id')
+      await currentUser.removeFavorite($storyId)
+      $(this).addClass("far")
+      $(this).removeClass('fas')
+    }
+  }
+
+  /**
+   * Function to remove a story that a user has made.
+   */
+
+  async function removeStory() {
+    let $storyId = $(this).closest("li").attr('id')
+    await currentUser.removeFavorite($storyId)
+    await storyList.deleteStory(currentUser, $storyId)
+    $(this).closest("li").remove()
+  }
+
+  /**
+   * 
+   * Shows one section within the sections array and hides the rest.
+   * 
+   */
+
+  function showAndHideRest(elementShow) {
+    $submitForm.trigger("reset")
+    $editForm.trigger("reset")
+    if (elementShow !== $filteredArticles) {
+      $filteredArticles.empty();
+    }
+    sections.forEach(($elem) => {
+      if ($elem === elementShow) {
+        $elem.show();
+      }
+      else {
+        $elem.hide()
+      }
+    });
+    elementShow.show();
   }
 
   /* simple function to pull the hostname from a URL */
@@ -281,16 +474,3 @@ $(async function() {
 });
 
 
-
-
-
-
-Story
-author: "aarav kapoor"
-createdAt: "2020-11-25T05:49:46.080Z"
-storyId: "8c8ca703-4b4c-4f21-8bf9-d8230d89cab3"
-title: "life"
-updatedAt: "2020-11-25T05:49:46.080Z"
-url: "http://google.com"
-username: "abc"
-__proto__: Object
